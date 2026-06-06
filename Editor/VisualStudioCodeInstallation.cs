@@ -67,11 +67,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static bool IsCandidateForDiscovery(string path)
 		{
 #if UNITY_EDITOR_OSX
-			return Directory.Exists(path) && Regex.IsMatch(path, ".*Code.*.app$", RegexOptions.IgnoreCase);
+			return Directory.Exists(path) && Regex.IsMatch(path, ".*(Code|Codium).*.app$", RegexOptions.IgnoreCase);
 #elif UNITY_EDITOR_WIN
-			return File.Exists(path) && Regex.IsMatch(path, ".*Code.*.exe$", RegexOptions.IgnoreCase);
+			return File.Exists(path) && Regex.IsMatch(path, ".*(Code|Codium).*.exe$", RegexOptions.IgnoreCase);
 #else
-			return File.Exists(path) && path.EndsWith("code", StringComparison.OrdinalIgnoreCase);
+			return File.Exists(path) && (path.EndsWith("code", StringComparison.OrdinalIgnoreCase) || path.EndsWith("codium", StringComparison.OrdinalIgnoreCase));
 #endif
 		}
 
@@ -129,10 +129,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			}
 
 			isPrerelease = isPrerelease || editorPath.ToLower().Contains("insider");
+			var isCodium = editorPath.ToLower().Contains("codium");
 			installation = new VisualStudioCodeInstallation()
 			{
 				IsPrerelease = isPrerelease,
-				Name = "Visual Studio Code" + (isPrerelease ? " - Insider" : string.Empty) + (version != null ? $" [{version.ToString(3)}]" : string.Empty),
+				Name = (isCodium ? "VSCodium" : "Visual Studio Code") + (isPrerelease ? " - Insider" : string.Empty) + (version != null ? $" [{version.ToString(3)}]" : string.Empty),
 				Path = editorPath,
 				Version = version ?? new Version()
 			};
@@ -152,15 +153,20 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			{
 				candidates.Add(IOPath.Combine(basePath, "Microsoft VS Code", "Code.exe"));
 				candidates.Add(IOPath.Combine(basePath, "Microsoft VS Code Insiders", "Code - Insiders.exe"));
+				candidates.Add(IOPath.Combine(basePath, "VSCodium", "VSCodium.exe"));
 			}
 #elif UNITY_EDITOR_OSX
 			var appPath = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
 			candidates.AddRange(Directory.EnumerateDirectories(appPath, "Visual Studio Code*.app"));
+			candidates.AddRange(Directory.EnumerateDirectories(appPath, "VSCodium*.app"));
 #elif UNITY_EDITOR_LINUX
 			// Well known locations
 			candidates.Add("/usr/bin/code");
 			candidates.Add("/bin/code");
 			candidates.Add("/usr/local/bin/code");
+			candidates.Add("/usr/bin/codium");
+			candidates.Add("/bin/codium");
+			candidates.Add("/usr/local/bin/codium");
 
 			// Preference ordered base directories relative to which desktop files should be searched
 			candidates.AddRange(GetXdgCandidates());
@@ -189,8 +195,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 				try
 				{
-					var desktopFile = IOPath.Combine(dir, "applications/code.desktop");
-					if (!File.Exists(desktopFile))
+					var desktopFile = new[] { "code.desktop", "codium.desktop" }
+						.Select(name => IOPath.Combine(dir, "applications", name))
+						.FirstOrDefault(File.Exists);
+					if (desktopFile == null)
 						continue;
 				
 					var content = File.ReadAllText(desktopFile);
