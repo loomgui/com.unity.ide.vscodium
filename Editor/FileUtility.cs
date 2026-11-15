@@ -25,10 +25,36 @@ namespace Microsoft.Unity.VisualStudio.Editor
 #endif
 		}
 
+		private static string _packageRootPath;
+
+		// Resolve the root of the package that contains this assembly instead of hard-coding a package name,
+		// so the lookup works whatever name the package is installed under (e.g. a fork).
+		private static string GetPackageRootPath()
+		{
+			if (_packageRootPath != null)
+				return _packageRootPath;
+
+			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(FileUtility).Assembly);
+			if (package == null)
+				return null;
+
+			// resolvedPath is the absolute on-disk location; assetPath is "Packages/<name>",
+			// which Unity's IO layer also resolves to the right package location
+			var root = !string.IsNullOrEmpty(package.resolvedPath) ? package.resolvedPath : package.assetPath;
+			if (string.IsNullOrEmpty(root))
+				return null;
+
+			_packageRootPath = root;
+			return _packageRootPath;
+		}
+
 		public static string GetPackageAssetFullPath(params string[] components)
 		{
-			// Unity has special IO handling of Packages and will resolve those path to the right package location
-			return GetAbsolutePath(Path.Combine("Packages", "com.unity.ide.visualstudio", Path.Combine(components)));
+			var root = GetPackageRootPath();
+			if (root == null)
+				return null;
+
+			return GetAbsolutePath(Path.Combine(root, Path.Combine(components)));
 		}
 
 		public static string GetAssetFullPath(string asset)
